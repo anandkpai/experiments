@@ -1,0 +1,18 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: jenkins
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: "/jenkins"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      rewrite ^(/jenkins)$ http://$best_http_host$1/ permanent;
+spec:
+  rules:
+  - host: localhost
+    http:
+      paths:
+      - path: /jenkins
+        backend:
+          serviceName: jenkins
+          servicePort: 8080
