@@ -1,57 +1,43 @@
-apiVersion: apps/v1
+apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
   name: jenkins
-  namespace: devops-tools
+  namespace: jenkins
 spec:
   replicas: 1
-  selector:
-    matchLabels:
-      app: jenkins-server
   template:
     metadata:
       labels:
-        app: jenkins-server
+        app: master
     spec:
-      securityContext:
-            fsGroup: 1000 
-            runAsUser: 1000
-      serviceAccountName: jenkins-admin
       containers:
-        - name: jenkins
-          image: jenkins/jenkins:lts
-          resources:
-            limits:
-              memory: "2Gi"
-              cpu: "1000m"
-            requests:
-              memory: "500Mi"
-              cpu: "500m"
-          ports:
-            - name: httpport
-              containerPort: 8080
-            - name: jnlpport
-              containerPort: 50000
-          livenessProbe:
-            httpGet:
-              path: "/login"
-              port: 8080
-            initialDelaySeconds: 90
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 5
-          readinessProbe:
-            httpGet:
-              path: "/login"
-              port: 8080
-            initialDelaySeconds: 60
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-          volumeMounts:
-            - name: jenkins-data
-              mountPath: /var/jenkins_home         
+      - name: master
+        image: gcr.io/GCP_PROJECT/jenkins-master:VERSION
+        ports:
+        - containerPort: 8080
+        - containerPort: 50000
+        readinessProbe:
+          httpGet:
+            path: /login
+            port: 8080
+          periodSeconds: 30
+          timeoutSeconds: 30
+          successThreshold: 2
+          failureThreshold: 5
+        volumeMounts:
+        - mountPath: /var/jenkins_home
+          name: jenkins-home
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1500Mi
+          requests:
+            cpu: 1000m
+            memory: 1500Mi
+      securityContext:
+        fsGroup: 1000
       volumes:
-        - name: jenkins-data
-          persistentVolumeClaim:
-              claimName: jenkins-pv-claim
+      - name: jenkins-home
+        gcePersistentDisk:
+          pdName: jenkins-home
+          fsType: ext4
