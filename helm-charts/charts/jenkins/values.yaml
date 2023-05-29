@@ -240,11 +240,13 @@ controller:
   #   targetPort: 9010 (Optional: Use to explicitly set targetPort if different from port)
 
   # List of plugins to be install during Jenkins controller start
-  installPlugins:
-    - kubernetes:3900.va_dce992317b_4
-    - workflow-aggregator:596.v8c21c963d92d
-    - git:5.0.0
-    - configuration-as-code:1625.v27444588cc3d
+  # temporarily disabled - it is not needed because  we are reading from PVC, 
+  # but we have to disable it as it throws a weird error of being unable to connect to jenkins.update.op
+  installPlugins: False
+    # - kubernetes:3900.va_dce992317b_4
+    # - workflow-aggregator:596.v8c21c963d92d
+    # - git:5.0.0
+    # - configuration-as-code:1625.v27444588cc3d
 
   # Set to false to download the minimum required version of all dependencies.
   installLatestPlugins: true
