@@ -241,7 +241,7 @@ controller:
 
   # List of plugins to be install during Jenkins controller start
   # temporarily disabled - it is not needed because  we are reading from PVC, 
-  # but we have to disable it as it throws a weird error of being unable to connect to jenkins.update.op
+  # but we have to disable it as it throws a weird error of being unable to connect to jenkins.update.io
   installPlugins: False
     # - kubernetes:3900.va_dce992317b_4
     # - workflow-aggregator:596.v8c21c963d92d
