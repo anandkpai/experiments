@@ -19,7 +19,7 @@ spec:
               apiVersion: argoproj.io/v1alpha1
               kind: Workflow
               metadata:
-                generateName: workflow-template-hello-world-
+                generateName: workflow-template-inner-steps-
               spec:
                 entrypoint: whalesay-template
                 arguments:
@@ -27,7 +27,7 @@ spec:
                     - name: message
                       value: "hello world"
                 workflowTemplateRef:
-                  name: workflow-template-whalesay-template
+                  name: workflow-template-inner-steps
               # metadata:
               #   name: special-trigger
               # spec:
