@@ -37,7 +37,7 @@ spec:
                       container:
                         image: docker/whalesay:latest
                         command: [cowsay]
-                        args: ["pre-amble to the original"]
+                        args: ["pre-amble"]
               parameters:
                 - src:
                     dependencyName: test-dep
