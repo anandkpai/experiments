@@ -53,12 +53,12 @@ spec:
           parameters:
           - name: message
             value: "inner-hello1"
-      - name: inner-hello1a
-        template: whalesay-template
-        arguments:
-          parameters:
-          - name: message
-            value: "inner-hello1"            
+      # - name: inner-hello1a
+      #   template: whalesay-template
+      #   arguments:
+      #     parameters:
+      #     - name: message
+      #       value: "inner-hello1"            
     - - name: inner-hello2a
         templateRef:
           name: workflow-template-whalesay-template
