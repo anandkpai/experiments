@@ -21,7 +21,7 @@ spec:
               metadata:
                 generateName: workflow-template-inner-steps-
               spec:
-                entrypoint: inner-steps
+                entrypoint: whalesay-template
                 arguments:
                   parameters:
                     - name: message
