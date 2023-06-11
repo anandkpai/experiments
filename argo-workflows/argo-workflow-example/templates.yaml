@@ -52,27 +52,17 @@ spec:
         arguments:
           parameters:
           - name: message
-            value: "inner-hello1"
-      # - name: inner-hello1a
-      #   template: whalesay-template
-      #   arguments:
-      #     parameters:
-      #     - name: message
-      #       value: "inner-hello1"            
+            value: "inner-hello1"      
     - - name: inner-hello2a
         # templateRef:
         #   name: workflow-template-whalesay-template
         template: whalesay-template
-        arguments:
-          parameters:
-          - name: message
-            value: "inner-hello2a"
+        command: [cowsay]
+        args: ["hello world hello2a"]
       - name: inner-hello2b
         template: whalesay-template
-        arguments:
-          parameters:
-          - name: message
-            value: "inner-hello2b"
+        command: [cowsay]
+        args: ["hello world hello2b"]
 ---
 # The following workflow executes a diamond workflow
 #
