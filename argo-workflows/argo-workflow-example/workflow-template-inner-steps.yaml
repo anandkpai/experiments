@@ -29,15 +29,18 @@ spec:
     steps:
 
     - - name: inner-hello1
+        when: "{{containsValue(inputs.paramters.message,first)}}"    
         templateRef:
           name: workflow-template-whalesay-template
-          template: whalesay-template
+          template: whalesay-template      
         arguments:
           parameters:
           - name: message
-            value: "inner-hello1"
+            value: "inner-hello1"        
+        
 
     - - name: inner-hello2
+        when: "{{containsValue(inputs.paramters.message,first)}}"    
         templateRef:
           name: workflow-template-python-template
           template: print-message
