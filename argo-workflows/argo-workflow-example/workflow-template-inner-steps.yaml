@@ -18,6 +18,7 @@ spec:
         arguments:
           parameters:
           - name: message
+            value: default
 
     - - name: inner-hello2
         templateRef:
@@ -26,4 +27,5 @@ spec:
         arguments:
           parameters:
           - name: message
+            value: default
 
