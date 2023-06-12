@@ -19,15 +19,15 @@ spec:
               apiVersion: argoproj.io/v1alpha1
               kind: Workflow
               metadata:
-                generateName: workflow-template-whalesay-template-
+                generateName: workflow-template-inner-steps-
               spec:
-                entrypoint: whalesay-template
+                entrypoint: inner-steps
                 arguments:
                   parameters:
                     - name: message
                       value: "hello world"
                 workflowTemplateRef:
-                  name: workflow-template-whalesay-template
+                  name: workflow-template-inner-steps
 
           parameters:
             - src:

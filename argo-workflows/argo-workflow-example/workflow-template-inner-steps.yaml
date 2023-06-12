@@ -15,7 +15,7 @@ spec:
         arguments:
           parameters:
           - name: message
-            value: "inner-hello1"
+            value: default
 
     - - name: inner-hello2
         templateRef:
@@ -24,4 +24,4 @@ spec:
         arguments:
           parameters:
           - name: message
-            value: "inner-hello2"
+            value: default
