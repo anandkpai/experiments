@@ -29,7 +29,7 @@ spec:
     steps:
 
     - - name: inner-hello1
-        when: "{{containsValue(inputs.paramters.message,first)}}"    
+        when: "{{containsValue(inputs.parameters.message,first)}}"    
         templateRef:
           name: workflow-template-whalesay-template
           template: whalesay-template      
@@ -40,7 +40,7 @@ spec:
         
 
     - - name: inner-hello2
-        when: "{{containsValue(inputs.paramters.message,first)}}"    
+        when: "{{containsValue(inputs.parameters.message,first)}}"    
         templateRef:
           name: workflow-template-python-template
           template: print-message
