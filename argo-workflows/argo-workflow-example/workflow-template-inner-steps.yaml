@@ -29,20 +29,22 @@ spec:
     steps:
 
     - - name: inner-hello1 
-        when: "'{{inputs.parameters.message}}' =~ 'first'"
+        when: "'{{parameters.message}}' =~ 'first'"
         templateRef:
           name: workflow-template-whalesay-template
           template: whalesay-template      
-        inputs:
+        arguments:
           parameters:
-          - name: message      
+          - name: message
+            value: "inner-hello1"        
         
 
     - - name: inner-hello2
-        when: "'{{inputs.parameters.message}}' =~ 'second'"        
+        when: "'{{parameters.message}}' =~ 'second'"        
         templateRef:
           name: workflow-template-python-template
           template: print-message
-        inputs:
+        arguments:
           parameters:
-          - name: message    
+          - name: message
+            value: "inner-hello2"
