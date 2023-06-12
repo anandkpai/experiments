@@ -5,24 +5,6 @@ metadata:
   name: workflow-template-inner-steps
 spec:
   templates:
-  
-  # - name: whalesay-template
-  #   inputs:
-  #     parameters:
-  #     - name: message
-  #   container:
-  #     image: docker/whalesay
-  #     command: [cowsay]
-  #     args: ["{{inputs.parameters.message}}"]
-  
-  # - name: print-message
-  #   inputs:
-  #     parameters:
-  #     - name: message
-  #   container:
-  #     image: alpine:latest
-  #     command: [sh, -c]
-  #     args: ["echo result was: {{inputs.parameters.message}}"]
 
   - name: inner-steps
     inputs: 
@@ -32,7 +14,7 @@ spec:
     steps:
 
     - - name: inner-hello1 
-        when: "{{inputs.parameters.message}} =~ first"
+        when: "{inputs.parameters.message} =~ first"
         templateRef:
           name: workflow-template-whalesay-template
           template: whalesay-template      
@@ -43,7 +25,7 @@ spec:
         
 
     - - name: inner-hello2
-        when: "{{inputs.parameters.message}} =~ second"        
+        when: "{inputs.parameters.message} =~ second"        
         templateRef:
           name: workflow-template-python-template
           template: print-message
