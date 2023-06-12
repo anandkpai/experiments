@@ -5,9 +5,12 @@ metadata:
   name: workflow-template-inner-steps
 spec:
   templates:
- 
   - name: inner-steps
-    steps:
+    inputs: 
+    parameters:
+    - name : message
+      value : default
+  steps:
     - - name: inner-hello1
         templateRef:
           name: workflow-template-whalesay-template
@@ -15,7 +18,6 @@ spec:
         arguments:
           parameters:
           - name: message
-
 
     - - name: inner-hello2
         templateRef:
