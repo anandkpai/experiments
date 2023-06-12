@@ -15,7 +15,7 @@ spec:
         arguments:
           parameters:
           - name: message
-            value: "{{inputs.parameters.message}}"
+
 
     - - name: inner-hello2
         templateRef:
@@ -24,4 +24,4 @@ spec:
         arguments:
           parameters:
           - name: message
-            value: "{{inputs.parameters.message}}"
+
