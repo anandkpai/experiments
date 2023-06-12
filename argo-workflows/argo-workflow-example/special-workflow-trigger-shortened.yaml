@@ -19,25 +19,18 @@ spec:
               apiVersion: argoproj.io/v1alpha1
               kind: Workflow
               metadata:
-                name: special-trigger
+                generateName: workflow-template-whalesay-template-
               spec:
-                entrypoint: whalesay
+                entrypoint: whalesay-template
                 arguments:
                   parameters:
                     - name: message
-                      # the value will get overridden by event payload from test-dep
-                      value: hello world
-                templates:
-                  - name: whalesay
-                    inputs:
-                      parameters:
-                        - name: message
-                    container:
-                      image: docker/whalesay:latest
-                      command: [cowsay]
-                      args: ["{{inputs.parameters.message}}"]
+                      value: "hello world"
+                workflowTemplateRef:
+                  name: workflow-template-whalesay-template
+
           parameters:
             - src:
                 dependencyName: test-dep
-                dataKey: body
+                dataKey: body.message
               dest: spec.arguments.parameters.0.value
