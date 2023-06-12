@@ -29,8 +29,7 @@ spec:
     steps:
 
     - - name: inner-hello1
-        when: "{{inputs.parameters.message,first)}} =~ first"    
-
+        when: "{{arguments.parameters.message}} =~ first"    
         templateRef:
           name: workflow-template-whalesay-template
           template: whalesay-template      
@@ -41,8 +40,7 @@ spec:
         
 
     - - name: inner-hello2
-        when: "{{inputs.parameters.message,first)}} =~ first"    
-        
+        when: "{{arguments.parameters.message}} =~ first"    
         templateRef:
           name: workflow-template-python-template
           template: print-message
