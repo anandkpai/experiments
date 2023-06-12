@@ -18,11 +18,7 @@ spec:
         # when: "{{inputs.parameters.message}} =~ first"
         templateRef:
           name: workflow-template-whalesay-template
-          template: whalesay-template      
-        arguments:
-          parameters:
-          - name: message
-            value: "{{inputs.parameters.message}}"        
+          template: whalesay-template         
         
 
     - - name: inner-hello2
@@ -30,7 +26,3 @@ spec:
         templateRef:
           name: workflow-template-python-template
           template: print-message
-        arguments:
-          parameters:
-          - name: message
-            value: "{{inputs.parameters.message}}"

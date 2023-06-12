@@ -9,8 +9,7 @@ spec:
     inputs:
       parameters:
       - name: message
-        value: default
     container:
       image: alpine:latest
       command: [sh, -c]
-      args: ["echo result was: {inputs.parameters.message.value}"]
+      args: ["echo result was: {{inputs.parameters.message}}"]
