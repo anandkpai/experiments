@@ -10,7 +10,8 @@ spec:
       - name: message
         value: default   
     steps:
-    - - name: inner-hello1
+    - - name: inner-step1
+        when: "[{{inputs.parameters.message}}] =~ first"
         templateRef:
           name: workflow-template-whalesay-template
           template: whalesay-template
@@ -19,7 +20,8 @@ spec:
           - name: message
             value: "{{inputs.parameters.message}}"
 
-    - - name: inner-hello2
+    - - name: inner-step2
+        when: "[{{inputs.parameters.message}}] =~ second"
         templateRef:
           name: workflow-template-python-template
           template: print-message
