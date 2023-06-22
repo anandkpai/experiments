@@ -28,6 +28,7 @@ spec:
         arguments:
           parameters:
           - name: message
-            value: {{steps.inner-step2.output.results}}
+            valueFrom:
+              parameter: "{{steps.inner-step2.output.results}}"
 
 
