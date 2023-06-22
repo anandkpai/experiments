@@ -28,6 +28,6 @@ spec:
         arguments:
           parameters:
           - name: message
-            value: {{step.inner-step2.output.results}}
+            value: {{steps.inner-step2.output.results}}
 
 
