@@ -11,7 +11,6 @@ spec:
         value: default   
     
     outputs:
-      parameters:
         name: "nested-inner-step-2-result"
         value: "{{steps.inner-steps-2.output.result}}"
 
@@ -35,6 +34,6 @@ spec:
           parameters:
           - name: message
             valueFrom:
-              parameter: "{{steps.inner-steps.output.parameters.nested-inner-step-2-result}}"
+              parameter: "{{steps.inner-steps.output.nested-inner-step-2-result}}"
 
 
