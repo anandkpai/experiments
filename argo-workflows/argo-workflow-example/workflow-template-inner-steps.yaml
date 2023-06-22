@@ -13,8 +13,7 @@ spec:
     outputs:
       parameters:
         name: "nested-inner-step-2-result"
-        valueFrom: 
-          parameter: "{{steps.inner-steps-2.output.result}}"
+        value: "{{steps.inner-steps-2.output.result}}"
 
     steps:
     - - name: inner-step2
