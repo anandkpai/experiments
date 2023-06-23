@@ -34,7 +34,6 @@ spec:
         arguments:
           parameters:
           - name: message
-            valueFrom:
-              parameter: "{{outputs.parameters.inner-step2-result}}"
+            value: "{{outputs.parameters.inner-step2-result}}"
 
 
