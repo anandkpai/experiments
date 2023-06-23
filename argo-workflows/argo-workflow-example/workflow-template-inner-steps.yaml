@@ -11,8 +11,9 @@ spec:
         value: default   
     
     outputs:
-        name: "inner-step2-result"
-        value: "{{steps.inner-step2.output.result}}"
+      parameters:
+        - name: "inner-step2-result" 
+          value: "{{steps.inner-step2.output.result}}"
 
     steps:
     - - name: inner-step2
@@ -34,6 +35,6 @@ spec:
           parameters:
           - name: message
             valueFrom:
-              parameter: "{{steps.inner-steps.outputs.inner-step2-result}}"
+              parameter: "{{steps.inner-steps.outputs.parameters.inner-step2-result}}"
 
 
