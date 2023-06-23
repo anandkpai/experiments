@@ -13,8 +13,8 @@ spec:
     outputs:
       parameters:
         - name: "inner-step2-result" 
-          parameters: 
-            valueFrom: "{{steps.inner-step2.outputs.result}}"
+          valueFrom: 
+             parameter: "{{steps.inner-step2.outputs.result}}"
 
     steps:
     - - name: inner-step2
