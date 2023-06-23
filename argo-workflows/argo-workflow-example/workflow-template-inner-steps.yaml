@@ -9,12 +9,6 @@ spec:
       parameters:
       - name: message
         value: default   
-    
-    outputs:
-      parameters:
-        - name: "inner-step2-result" 
-          valueFrom: 
-             parameter: "{{steps.inner-step2.outputs.result}}"
 
     steps:
     - - name: inner-step2
@@ -35,6 +29,6 @@ spec:
         arguments:
           parameters:
           - name: message
-            valueFrom: {{steps.inner-steps.outputs.parameters.inner-step2-result}}
+            value: "{{steps.inner-step2.outputs.result}}"
 
 
