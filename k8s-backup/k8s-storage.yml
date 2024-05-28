@@ -1,0 +1,68 @@
+kind: Policy
+apiVersion: config.kio.kasten.io/v1alpha1
+metadata:
+  name: k8s-backup
+  namespace: kasten-io
+  uid: 1c4670b1-4a11-4820-9a42-c24cd38c8791
+  resourceVersion: "3448106"
+  generation: 2
+  creationTimestamp: 2024-05-17T00:24:26Z
+  managedFields:
+    - manager: controllermanager-server
+      operation: Update
+      apiVersion: config.kio.kasten.io/v1alpha1
+      time: 2024-05-17T00:24:26Z
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:spec:
+          f:actions: {}
+        f:status:
+          f:hash: {}
+          f:specModifiedTime: {}
+          f:validation: {}
+    - manager: dashboardbff-server
+      operation: Update
+      apiVersion: config.kio.kasten.io/v1alpha1
+      time: 2024-05-17T00:24:26Z
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:spec:
+          .: {}
+          f:comment: {}
+          f:createdBy: {}
+          f:frequency: {}
+          f:lastModifyHash: {}
+          f:selector:
+            .: {}
+            f:matchExpressions: {}
+        f:status: {}
+spec:
+  comment: "create a back-up for the kubernetes cluster "
+  frequency: "@onDemand"
+  selector:
+    matchExpressions:
+      - key: k10.kasten.io/appNamespace
+        operator: In
+        values:
+          - "*"
+          - kasten-io-cluster
+  actions:
+    - action: backup
+    - action: export
+      exportParameters:
+        frequency: "@onDemand"
+        receiveString: bIzAPpoanmEvnxd1gE9tq9QrR2AUA2qB1BPV9X1gS6BlHc5fuHunecOSPeuHi/oQEgS3zKuNGU+u7zELhTr9jQ0jnw8JNfydUYiupt6M58eYs/9OxWwKAyrouZfuVb1KbKUqkl1S5rVOkbOQ7NzvlG6vIonJ71AW6X7AEXGLw9jXxLVOInjJuU2VnHjIKk9soJx4XYOJlGkb00o3MTiL9929XXSzHSjrpihO/IrbWJdep4bOOnTYbsUDs6SuidqyZJbfIPGPK8JmR2n8tV0moS7Z6PrTJKvc3BCKQz01QDQjGSmX7WRloiXp/YbGpsogkEh1fpcQgndZ25oomDrNGrUYoedHblIO45A2iYegsam4ikbVxNrWsXNu0EHgnTwttI2leMMR6/ehFA9pwp+selel0aoWA/feqFvtkNgMcihcn+5KIsWFeilBEUDclOT1ZF7C9mfGHxAqc0PZTdUO1A3ZTC4
+        profile:
+          name: k8s-storage
+          namespace: kasten-io
+        migrationToken:
+          name: k8s-backup-migration-token
+          namespace: kasten-io
+        exportData:
+          enabled: true
+  createdBy: k10-admin
+  lastModifyHash: 2670052424
+status:
+  validation: Success
+  hash: 3622729726
+  specModifiedTime: 2024-05-17T00:24:26Z
