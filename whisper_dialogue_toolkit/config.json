@@ -1,0 +1,8 @@
+{
+  "speaker1": "Anand",
+  "speaker2": "Anindya",
+  "gap_threshold": 1.2,
+  "chunk_minutes": 10,
+  "model": "medium",
+  "device": "auto"
+}
