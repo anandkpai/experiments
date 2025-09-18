@@ -1,0 +1,7 @@
+# remove all pycache
+__pycache__/
+lib/
+whisper_dialogue_toolkit/out/
+whisper_dialogue_toolkit/whisper/
+fails/
+nntp/nntp
