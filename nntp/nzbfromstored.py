@@ -1,4 +1,4 @@
-from create_db_for_ng import get_config
+from create_db_basic import get_config
 # nzb_from_sqlite_xml.py
 import sqlite3, re, time
 import xml.etree.ElementTree as ET

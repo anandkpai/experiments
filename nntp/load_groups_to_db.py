@@ -1,5 +1,5 @@
 # load_groups_sqlite.py
-from create_db_for_ng import get_config
+from create_db_basic import get_config
 import json, time, sqlite3, sys
 config = get_config()
 

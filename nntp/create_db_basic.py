@@ -4,16 +4,22 @@ import sqlite3
 from email.utils import parsedate_to_datetime
 from email.header import decode_header, make_header
 from datetime import timezone
+import time
 import json
 import os
 import re
-DB_PATH = "/mnt/r/tmp/nzbindex/"
-TMP_ROWS_PATH_BASE = "/mnt/r/tmp/nzbindex/"
+DB_PATH = "/mnt/r/tmp/nzbindex"
+TMP_ROWS_PATH_BASE = "/mnt/r/tmp/nzbindex/headers-archive"
 
 def get_config():
     config = configparser.ConfigParser()
     config.read("/mnt/r/tmp/nzbindex/nzbindex.ini")    
     return config 
+
+def get_nntp_client(config:configparser.ConfigParser):
+    sconfig = config['servers']
+    nntp_client = nntp.NNTPClient( sconfig['host'], sconfig['port'], sconfig['username'], sconfig['password'], use_ssl=True)
+    return nntp_client
 
 def ensure_db(conn):
     cur = conn.cursor()
@@ -45,6 +51,9 @@ def ensure_db(conn):
     # Helpful indexes
     cur.execute("CREATE INDEX IF NOT EXISTS idx_articles_group_artnum ON articles(group_name, artnum);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_articles_date ON articles(date_utc);")
+
+    conn.commit()
+
 
 def _decode_rfc2047(s: str) -> str:
     # Subjects/From may be "=?utf-8?B?...?=" etc.
@@ -161,7 +170,18 @@ def upsert_headers(conn: sqlite3.Connection, group: str, rows: list[dict]):
 
     cur = conn.cursor()
 
-    # Base table upsert (message_id is PRIMARY KEY)
+    # speed-friendly pragmas for bulk writes
+    cur.execute("PRAGMA journal_mode=WAL;")         # once per DB is enough
+    cur.execute("PRAGMA synchronous=OFF;")
+    cur.execute("PRAGMA temp_store=MEMORY;")
+    cur.execute("PRAGMA busy_timeout=5000;")
+    cur.execute(f"PRAGMA cache_size=-{512*1024};")  # in KB
+    cur.execute("PRAGMA mmap_size=30000000000;")
+
+    cur.execute("BEGIN IMMEDIATE;")  # grab the write lock up front
+
+    start_time = time.time()
+    # 1) Upsert base table
     cur.executemany(
         """
         INSERT INTO articles (
@@ -183,11 +203,24 @@ def upsert_headers(conn: sqlite3.Connection, group: str, rows: list[dict]):
         to_bind,
     )
 
-    # FTS5: delete then insert to avoid duplicates (FTS has no ON CONFLICT)
-    cur.executemany(
-        "DELETE FROM articles_fts WHERE message_id = :message_id;",
-        to_bind,
-    )
+
+    # TO DO move the fts to a separate process 
+    # 2) Stage message_ids we’re refreshing
+    cur.execute("DROP TABLE IF EXISTS _tmp_mid;")
+    cur.execute("CREATE TEMP TABLE _tmp_mid(message_id TEXT PRIMARY KEY);")
+    cur.executemany("INSERT OR IGNORE INTO _tmp_mid(message_id) VALUES(:message_id);", to_bind)
+
+    # 3) ONE delete instead of N deletes
+    cur.execute("""
+        DELETE FROM articles_fts
+        WHERE rowid IN (
+            SELECT f.rowid
+            FROM articles_fts AS f
+            JOIN _tmp_mid AS t ON f.message_id = t.message_id
+        );
+    """)
+
+    # 4) Bulk insert refreshed rows
     cur.executemany(
         """
         INSERT INTO articles_fts (subject, from_addr, message_id, group_name, artnum)
@@ -196,7 +229,15 @@ def upsert_headers(conn: sqlite3.Connection, group: str, rows: list[dict]):
         to_bind,
     )
 
-    conn.commit()
+    cur.execute("COMMIT;")
+
+    end_time = time.time()    
+    cur.execute("PRAGMA synchronous=NORMAL;")
+
+    print(f"wrote to db {len(rows):,} for {group}, Elapsed = {end_time - start_time:.4f} seconds")
+    
+
+
 
 def fetch_all_headers(nntp_client, group):
     count,first,last,name = nntp_client.group(group)
@@ -209,25 +250,24 @@ def fetch_all_headers(nntp_client, group):
 
 
 if __name__ == '__main__':
-
+    config = get_config()
     groups = config['groups']['names'].split(',')    
     for group in groups:
         conn = sqlite3.connect(f"{DB_PATH}/{group}.sqlite")
-        cached_headers_file = f"TMP_ROWS_PATH{group}.json"
+        cached_headers_file = f"{TMP_ROWS_PATH_BASE}/{group}.json"
         if os.path.exists(cached_headers_file):
             with open(cached_headers_file, "r", encoding="utf-8") as f:
                 rows = json.load(f)        
-            print(f'found {len(rows)} from {cached_headers_file}')
+            print(f'found {len(rows):,} from {cached_headers_file}')
         else:
             print(f'making nntp connection to server')
-            
-            sconfig = config['servers']
-            nntp_client = nntp.NNTPClient( sconfig['host'], sconfig['port'], sconfig['username'], sconfig['password'], use_ssl=True)
+            nntp_client = get_nntp_client(config)
+
             # nntp_client.xfeature_compress_gzip()
             #groups = list(nntp_client.list_active())
             rows = fetch_all_headers(nntp_client, group)
             with open(cached_headers_file, "w", encoding="utf-8") as f:
                 json.dump(rows, f, ensure_ascii=False, indent=2)
-    ensure_db(conn)
-    upsert_headers(conn, group, rows)
-    print(f"Upserted {len(rows)} headers into {DB_PATH}")
+        ensure_db(conn)
+        upsert_headers(conn, group, rows)
+    print(f"Upserted {len(rows):,} headers into {DB_PATH}")

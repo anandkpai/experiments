@@ -10,7 +10,10 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "env": {
+                "PYDEVD_WARN_EVALUATION_TIMEOUT": "15"
+            }
         }
     ]
 }
