@@ -1,10 +1,163 @@
-from create_db_for_ng import DB_PATH
+from create_db_for_ng import get_config
 # nzb_from_sqlite_xml.py
 import sqlite3, re, time
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import xml.dom.minidom as minidom
+import re
+config = get_config()
+DEBUG = config['debug']['DEBUG']
 
+# ---------- normalizers & parsers ----------
+
+LEADING_SET_PREFIX = re.compile(
+    r"^\s*(?:\[\s*\d+\s*/\s*\d+\s*\]\s*[-–:]*\s*)", re.IGNORECASE
+)
+
+COUNTER_RE = re.compile(
+    r"""(?:\byenc\b\s*)?[\(\[\{]\s*(\d+)\s*[/ ]\s*(\d+)\s*[\)\]\}]""",
+    re.IGNORECASE | re.VERBOSE,
+)
+PART_N_OF_M_RE = re.compile(r"\bpart\s*(\d+)\s*of\s*(\d+)\b", re.IGNORECASE)
+
+def normalize_subject_base(subject: str) -> str:
+    s = subject or ""
+    # drop leading collection index like "[01/37] - "
+    s = LEADING_SET_PREFIX.sub("", s)
+    # remove ALL counters (n/m and "part n of m")
+    s = COUNTER_RE.sub("", s)
+    s = PART_N_OF_M_RE.sub("", s)
+    # clean common noise
+    s = re.sub(r"\byenc\b", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"\s{2,}", " ", s).strip(" -_.")
+    return s
+
+def find_all_counters(subject: str):
+    s = subject or ""
+    out = []
+    for m in COUNTER_RE.finditer(s):
+        out.append((int(m.group(1)), int(m.group(2))))
+    for m in PART_N_OF_M_RE.finditer(s):
+        out.append((int(m.group(1)), int(m.group(2))))
+    return out
+
+def extract_segment_counter(subject: str):
+    """
+    Return (n, m) for the per-file segments by choosing the counter with the smallest m.
+    If none found, return (1, 1).
+    """
+    counters = find_all_counters(subject or "")
+    if not counters:
+        return (1, 1)
+    # choose the smallest m; tie-breaker: smallest n
+    counters.sort(key=lambda t: (t[1], t[0]))
+    return counters[0]
+
+EMAIL_IN_BRACKETS = re.compile(r"<([^>]+)>")
+EMAIL_IN_PARENS   = re.compile(r"\(([^)]+)\)")
+def normalize_poster(poster: str) -> str:
+    """
+    Try to stabilize poster across variations like:
+    - "Name <mail@x>" → "mail@x"
+    - "mail@x (Name)" → "mail@x"
+    - fallback: lowercased, condensed whitespace
+    """
+    p = poster or "unknown"
+    m = EMAIL_IN_BRACKETS.search(p)
+    if m:
+        return m.group(1).strip().lower()
+    # if it looks like "mail@x (Name)"
+    if "@" in p and "(" in p and ")" in p:
+        # take before first space-paren
+        p = p.split(" (", 1)[0]
+        return p.strip().lower()
+    return re.sub(r"\s{2,}", " ", p.strip()).lower()
+
+import re
+
+# ------------------ subject parsing helpers ------------------
+
+LEADING_SET_PREFIX = re.compile(r"^\s*\[\s*\d+\s*/\s*\d+\s*\]\s*[-–:]*\s*", re.I)
+COUNTER_ANY = re.compile(r"""
+    (?P<full>(?P<open>[\(\[\{])\s*(?P<n>\d+)\s*[/ ]\s*(?P<m>\d+)\s*(?P<close>[\)\]\}]))
+""", re.I | re.VERBOSE)
+PART_N_OF_M = re.compile(r"\bpart\s*(?P<n>\d+)\s*of\s*(?P<m>\d+)\b", re.I)
+
+def _find_counters(subject: str):
+    s = subject or ""
+    out = []
+    for m in COUNTER_ANY.finditer(s):
+        out.append((m.start(), int(m.group("n")), int(m.group("m"))))
+    for m in PART_N_OF_M.finditer(s):
+        out.append((m.start(), int(m.group("n")), int(m.group("m"))))
+    out.sort(key=lambda t: t[0])  # by position (left → right)
+    return out
+
+def extract_nm_leftmost(subject: str):
+    counters = _find_counters(subject)
+    return (counters[0][1], counters[0][2]) if counters else (1, 1)
+
+def extract_nm_rightmost(subject: str):
+    counters = _find_counters(subject)
+    return (counters[-1][1], counters[-1][2]) if counters else (1, 1)
+
+def normalize_subject_base(subject: str) -> str:
+    s = subject or ""
+    s = LEADING_SET_PREFIX.sub("", s)   # drop leading "[x/y] - "
+    s = COUNTER_ANY.sub("", s)          # remove (n/m)/[n/m]/{n/m}
+    s = PART_N_OF_M.sub("", s)          # remove "part n of m"
+    s = re.sub(r"\byenc\b", "", s, flags=re.I)
+    s = re.sub(r"\s{2,}", " ", s).strip(" -_.")
+    return s
+
+# ------------------ grouping core ------------------
+
+def _group_with_picker(rows, pick_nm, include_poster_in_key=False):
+    grouped, singles = {}, []
+    for r in rows:
+        subj = r["subject"] or ""
+        base = normalize_subject_base(subj)
+        n, m = pick_nm(subj)
+
+        # normalize or ignore poster; ignoring avoids splits on trivial variations
+        poster = (r["from_addr"] or "unknown").strip().lower()
+        key = (base, m, poster) if include_poster_in_key else (base, m)
+
+        if m > 1:
+            bucket = grouped.setdefault(key, {})
+            if n not in bucket or r["artnum"] < bucket[n]["artnum"]:
+                bucket[n] = r
+        else:
+            singles.append(r)
+
+    # scoring: how “good” is this grouping?
+    total_grouped_parts = sum(len(segmap) for segmap in grouped.values())
+    groups_with_multi = sum(1 for segmap in grouped.values() if len(segmap) >= 2)
+    score = (total_grouped_parts, groups_with_multi)
+    return grouped, singles, score
+
+def group_rows_auto(rows, include_poster_in_key=False, debug=False):
+    # Try RIGHTMOST
+    g_r, s_r, score_r = _group_with_picker(rows, extract_nm_rightmost, include_poster_in_key)
+    # Try LEFTMOST
+    g_l, s_l, score_l = _group_with_picker(rows, extract_nm_leftmost, include_poster_in_key)
+
+    # Choose the one that groups more parts; tie→more groups-with-multi; tie→prefer rightmost
+    if score_l > score_r:
+        choice = "leftmost"
+        grouped, singles, score = g_l, s_l, score_l
+    else:
+        choice = "rightmost"
+        grouped, singles, score = g_r, s_r, score_r
+
+    if debug:
+        print(f"[group_rows_auto] choice={choice}  score_left={score_l}  score_right={score_r}")
+        # Show a quick summary
+        for i, (k, segmap) in enumerate(grouped.items()):
+            if i >= 10: break
+            print(f"  key={k} parts={sorted(segmap.keys())}")
+
+    return grouped, singles, choice
 
 # ---------------- Subject / parts parsing ----------------
 
@@ -67,8 +220,10 @@ def message_id_text(mid: str) -> str:
 def build_nzb_filtered(db_path: str, group: str, subject_like: str,
                        from_like: str | None, out_path: str,
                        require_complete_sets: bool = False):
-    if not group or not subject_like:
-        raise ValueError("group and subject_like are required")
+    if not group:
+        raise ValueError("group and are required")
+    if not subject_like:
+        subject_like= " "
 
     base_like = _strip_all_counters(subject_like) or subject_like
 
@@ -96,18 +251,20 @@ def build_nzb_filtered(db_path: str, group: str, subject_like: str,
         return
 
     # Group multipart by (base_without_counters, chosen_m, poster)
-    grouped, singles = {}, []
-    for r in rows:
-        base, n, m = parse_subject_for_grouping(r["subject"])
-        poster = (r["from_addr"] or "unknown").strip()
-        if m > 1:
-            key = (base, m, poster)
-            bucket = grouped.setdefault(key, {})
-            # keep earliest artnum per segment number
-            if n not in bucket or r["artnum"] < bucket[n]["artnum"]:
-                bucket[n] = r
-        else:
-            singles.append(r)
+    grouped, singles, choice = group_rows_auto(rows, include_poster_in_key=True, debug=False)
+
+    if DEBUG:
+        print('printing rows')
+        for idx,r in enumerate(rows):
+            print(f"{idx} row: {dict(r)}")
+
+        print("printing grouped")
+        for idx, (k, segmap) in enumerate(grouped.items()):
+            print(f"{idx} key={k} parts={sorted(segmap.keys())}")
+
+        print("printing singles")
+        for idx, s in enumerate(singles[:10]):  # preview
+            print(f"{idx} single artnum={s['artnum']} subj={s['subject']!r}")
 
     # Build NZB XML
     nzb = ET.Element("nzb", xmlns="http://www.newzbin.com/DTD/2003/nzb")
@@ -170,7 +327,7 @@ def build_nzb_filtered(db_path: str, group: str, subject_like: str,
 
     # Remove any remaining empty lines at the top (just in case)
     while lines and not lines[0].strip():
-        lines.pop(0)
+        print(lines.pop(0))
 
     # Join, ensure newline at EOF, and encode to bytes
     pretty_body = ("\n".join(lines) + "\n").encode("utf-8")
@@ -186,34 +343,16 @@ def build_nzb_filtered(db_path: str, group: str, subject_like: str,
 
     print(f"NZB written: {out_path}  (rows={len(rows)}, multiparts={len(grouped)}, singles={len(singles)})")            
 
-    # # Pretty-print the XML tree in place (Python 3.9+)
-    # ET.indent(nzb, space="  ", level=0)
-    # # Write: XML declaration + DOCTYPE + root
-    # xml_bytes = ET.tostring(nzb, encoding="utf-8")
-    # doctype = b'<!DOCTYPE nzb PUBLIC "-//newzBin//DTD NZB 1.0//EN" "http://www.newzbin.com/DTD/nzb/nzb-1.0.dtd">\n'
-    # with open(out_path, "wb") as f:
-    #     f.write(b'<?xml version="1.0" encoding="utf-8"?>\n')
-    #     f.write(doctype)
-    #     f.write(xml_bytes)
 
-    # print(f"NZB written: {out_path}  (rows={len(rows)}, multiparts={len(grouped)}, singles={len(singles)})")
-
-# ---------------- Example ----------------
-# build_nzb_filtered(
-#     db_path="data/usenet_headers.sqlite",
-#     group="alt.comp",
-#     subject_like="Sue Wong's 2010 Fall Collection Preview Event.jpg (1/5) (1/37)",
-#     from_like="yum",
-#     out_path="sue_wong.nzb",
-#     require_complete_sets=False,
-# )
-
-
+# ---------------- Main  ----------------
 
 if __name__=='__main__':
-    group = 'alt.binaries.pictures.teen-starlets'
-    subject_filter = r"Bella Thorne%2010"
-    from_filter = r"yum"
-    nzbName = f"{subject_filter.replace('%','_')}_{from_filter.replace('%','_')}"
-    db_path = f"{DB_PATH}{group}.sqlite"
-    build_nzb_filtered(db_path, group, subject_like=subject_filter, from_like=from_filter, out_path=f"/mnt/r/tmp/nzbindex/{nzbName}.nzb")
+    subject_filter  = config['filters']['subject']
+    from_filter     = config['filters']['from']
+    groups          = config['groups']['names'].split(',')
+    DB_BASE_PATH    = config['db']['DB_BASE_PATH']
+    counter = 1
+    for group in groups:
+        db_path = f"{DB_BASE_PATH}/{group}.sqlite"
+        nzbName = f"{subject_filter.replace('%','_')}_{from_filter.replace('%','_')}_{counter}"
+        build_nzb_filtered(db_path, group, subject_like=subject_filter, from_like=from_filter, out_path=f"/mnt/r/tmp/nzbindex/{nzbName}.nzb")

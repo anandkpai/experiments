@@ -10,6 +10,10 @@ import re
 DB_PATH = "/mnt/r/tmp/nzbindex/"
 TMP_ROWS_PATH_BASE = "/mnt/r/tmp/nzbindex/"
 
+def get_config():
+    config = configparser.ConfigParser()
+    config.read("/mnt/r/tmp/nzbindex/nzbindex.ini")    
+    return config 
 
 def ensure_db(conn):
     cur = conn.cursor()
@@ -205,8 +209,7 @@ def fetch_all_headers(nntp_client, group):
 
 
 if __name__ == '__main__':
-    config = configparser.ConfigParser()
-    config.read("/mnt/r/tmp/nzbindex/nzbindex.ini")    
+
     groups = config['groups']['names'].split(',')    
     for group in groups:
         conn = sqlite3.connect(f"{DB_PATH}/{group}.sqlite")
