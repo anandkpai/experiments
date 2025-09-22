@@ -217,25 +217,49 @@ def message_id_text(mid: str) -> str:
 
 # ---------------- Main builder ----------------
 
-def build_nzb_filtered(db_path: str, group: str, subject_like: str,
-                       from_like: str | None, out_path: str,
+def build_nzb_filtered(db_path: str, group: str, 
+                       subject_like: str | None,
+                       from_like: str | None, 
+                       out_path: str,
+                       subject_not_like: str = None,
+                       from_not_like: str = None, 
                        require_complete_sets: bool = False):
     if not group:
-        raise ValueError("group and are required")
-    if not subject_like:
-        subject_like= " "
+        raise ValueError("group is required")
+    if not subject_like and not from_like:
+        raise ValueError("one of subject or from are required")
+    
 
     base_like = _strip_all_counters(subject_like) or subject_like
 
     conn = sqlite3.connect(db_path)
+    conn.set_trace_callback(print)
+
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
+    
+    params = [group]
+    where = ["group_name = ?"]
+    # remove always unwanted 
+    where.append("subject NOT LIKE ? COLLATE NOCASE")
+    params.append(f"%{'exe'}%")
 
-    where = ["group_name = ?", "subject LIKE ? COLLATE NOCASE"]
-    params = [group, f"%{base_like}%"]
+    if base_like: 
+        where.append("subject LIKE ? COLLATE NOCASE")
+        params.append(f"%{base_like}%")
+
     if from_like:
         where.append("from_addr LIKE ? COLLATE NOCASE")
         params.append(f"%{from_like}%")
+
+    if subject_not_like: 
+        where.append("subject NOT LIKE ? COLLATE NOCASE")
+        params.append(f"%{subject_not_like}%")
+
+    if from_not_like:
+        where.append("from_addr NOT LIKE ? COLLATE NOCASE")
+        params.append(f"%{subject_not_like}%")
+
 
     cur.execute(f"""
         SELECT message_id, subject, from_addr, date_utc, bytes, artnum, group_name
@@ -249,6 +273,11 @@ def build_nzb_filtered(db_path: str, group: str, subject_like: str,
     if not rows:
         print(f"No rows for group='{group}', subject~'{base_like}', from~'{from_like or ''}'")
         return
+    
+    print(f"found {len(rows):,} rows for group='{group}', subject~'{base_like}', from~'{from_like or ''}'")
+    if len(rows) > 1_000_000 : 
+        print('******too many rows********')
+        return 
 
     # Group multipart by (base_without_counters, chosen_m, poster)
     grouped, singles, choice = group_rows_auto(rows, include_poster_in_key=True, debug=False)
@@ -341,7 +370,7 @@ def build_nzb_filtered(db_path: str, group: str, subject_like: str,
         f.write(doctype)                                      # DOCTYPE immediately after
         f.write(pretty_body)                                  # pretty-printed body only
 
-    print(f"NZB written: {out_path}  (rows={len(rows)}, multiparts={len(grouped)}, singles={len(singles)})")            
+    print(f"NZB written: {out_path}  (rows={len(rows):,}, multiparts={len(grouped)}, singles={len(singles)} for group {group}")            
 
 
 # ---------------- Main  ----------------
@@ -349,10 +378,17 @@ def build_nzb_filtered(db_path: str, group: str, subject_like: str,
 if __name__=='__main__':
     subject_filter  = config['filters']['subject']
     from_filter     = config['filters']['from']
+    not_subject     = config['filters']['not_subject']
+    not_from        = config['filters']['not_from']
     groups          = config['groups']['names'].split(',')
     DB_BASE_PATH    = config['db']['DB_BASE_PATH']
     counter = 1
+    name_strs = [s.replace('%','_') for s in [subject_filter, from_filter, f"not_{not_subject}" if not_subject else "", f"not_{not_from}" if not_from else ""]]
+    nzbBaseName = "_".join(name_strs)
     for group in groups:
-        db_path = f"{DB_BASE_PATH}/{group}.sqlite"
-        nzbName = f"{subject_filter.replace('%','_')}_{from_filter.replace('%','_')}_{counter}"
-        build_nzb_filtered(db_path, group, subject_like=subject_filter, from_like=from_filter, out_path=f"/mnt/r/tmp/nzbindex/{nzbName}.nzb")
+        db_path = f"{DB_BASE_PATH}/{group}.sqlite"        
+        build_nzb_filtered(db_path, group, 
+                           subject_like=subject_filter, from_like=from_filter, 
+                           out_path=f"/mnt/r/tmp/nzbindex/{nzbBaseName}_{counter}.nzb",
+                           subject_not_like=not_subject, from_not_like=not_from
+                           )

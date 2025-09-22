@@ -4,6 +4,7 @@ import sqlite3
 from email.utils import parsedate_to_datetime
 from email.header import decode_header, make_header
 from datetime import timezone
+from pathlib import Path
 import time
 import json
 import os
@@ -247,6 +248,22 @@ def fetch_all_headers(nntp_client, group):
     return [parse_overview_line(ln)  for ln in nntp_client._info(code, msg)]
          
 
+def load_json_or_ndjson(path):
+    """
+    Reads either:
+      - NDJSON (one JSON object or value per line), or
+      - JSON array ([ {...}, {...}, ... ]).
+    Returns a list of Python objects.
+    """
+    path = Path(path)
+    with path.open("r", encoding="utf-8") as f:
+        first_char = f.read(1)
+        f.seek(0)
+
+        if first_char == "[":  # JSON array
+            return json.load(f)
+        else:  # NDJSON
+            return [json.loads(line) for line in f if line.strip()]
 
 
 if __name__ == '__main__':
@@ -256,8 +273,7 @@ if __name__ == '__main__':
         conn = sqlite3.connect(f"{DB_PATH}/{group}.sqlite")
         cached_headers_file = f"{TMP_ROWS_PATH_BASE}/{group}.json"
         if os.path.exists(cached_headers_file):
-            with open(cached_headers_file, "r", encoding="utf-8") as f:
-                rows = json.load(f)        
+            rows = load_json_or_ndjson(cached_headers_file)
             print(f'found {len(rows):,} from {cached_headers_file}')
         else:
             print(f'making nntp connection to server')

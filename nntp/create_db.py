@@ -1,13 +1,10 @@
 from create_db_basic import get_config, upsert_headers,ensure_db, get_nntp_client, TMP_ROWS_PATH_BASE
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.utils import parsedate_to_datetime
 import sqlite3, json
 from nntp.headerdict import HeaderDict
 from configparser import ConfigParser
 import time 
-import threading
 
-MAX_WORKERS = 1
 
 config = get_config()
 
@@ -52,31 +49,11 @@ def row_from_overview(group: str, artnum: int, ov: dict) -> dict:
         "xref": xref,
     })
 
-def _build_ranges_sliced(start_chunk: int, end: int, workers: int, min_slice: int = 100_000):
-    start_chunk = int(start_chunk); end = int(end)
-    if end < start_chunk:
-        return []
-
-    span = end - start_chunk + 1
-
-    # target number of slices = workers, but don't go below min_slice
-    slices = min(workers, max(1, span // min_slice))
-    step = max(min_slice, span // slices)
-
-    ranges = []
-    s = start_chunk
-    for i in range(slices):
-        e = end if i == slices - 1 else min(end, s + step - 1)
-        ranges.append((s, e))
-        s = e + 1
-    return ranges
-
-
 def fetch_rows_xzver(nntp_client, group: str, start: int, end: int):
     rows = []
     start_time = time.time()
     cnt, srv_first, srv_last, _ = nntp_client.group(group)    
-    for artnum, ov in nntp_client.xzver((int(start), int(end))):
+    for artnum, ov in nntp_client.xover((int(start), int(end))):
         # Skip obviously bad tuples
         if artnum is None or not isinstance(ov, HeaderDict):
             continue
@@ -88,35 +65,7 @@ def fetch_rows_xzver(nntp_client, group: str, start: int, end: int):
 
     return rows
 
-def _fetch_one_range(config, group, a, b):
-    """
-    Worker: open its own NNTP client, fetch rows for [a..b], then close.
-    """
-    with  get_nntp_client(config) as c:  # you already have this factory
-        print("thread", threading.get_ident(), "fd", c.socket.fileno())
-        try:
-            return fetch_rows_xzver(c, group, a, b)
-        finally:
-            try:
-                print("closing  ... thread", threading.get_ident(), "fd", c.socket.fileno())
-                c.close()
-            except Exception:
-                pass
-
-
-def fetch_rows_parallel(config, group:str, start_chunk:int, end:int, workers:int = MAX_WORKERS):
-    ranges = _build_ranges_sliced(start_chunk, end, workers, min_slice=100_000)
-    print(f"Built {len(ranges)} ranges with min_slice=100k: {ranges[:3]}{' ...' if len(ranges) > 3 else ''}")
-
-    results = []
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(_fetch_one_range, config, group, a, b) for a, b in ranges]
-        for fut in as_completed(futures):
-            results.extend(fut.result())
-    return results
-
-
-def fetch_headers_chunked(config:ConfigParser, group:str, limit: int = 5_000_000_000 , raw_chunk_size: int = 500_000, newest_first: bool = False, start: int = 0, back_filled_up_to:int = -1, workers:int = MAX_WORKERS):
+def fetch_headers_chunked(config:ConfigParser, group:str, limit: int = 5_000_000 , chunk_size: int = 500_000, newest_first: bool = False, start: int = 0, back_filled_up_to:int = -1):
     """
     XZVER-only, chunked.
     - newest_first=True: backfill downward from `start` (or server last) down to max(server first, prev_end+1).
@@ -137,11 +86,11 @@ def fetch_headers_chunked(config:ConfigParser, group:str, limit: int = 5_000_000
     """
 
     nntp_client = get_nntp_client(config)
+    nntp_client.xfeature_compress_gzip() 
 
     cnt, srv_first, srv_last, _ = nntp_client.group(group)
     srv_first, srv_last = int(srv_first), int(srv_last)
 
-    chunk_size = MAX_WORKERS * raw_chunk_size
 
     print(f"server returned first artnum {srv_first}, last artnum {srv_last} ")
     print(f"server first={srv_first} last={srv_last}")
@@ -176,7 +125,7 @@ def fetch_headers_chunked(config:ConfigParser, group:str, limit: int = 5_000_000
                 start_chunk = end - remaining + 1
 
             # for s in iter_range(start_chunk, end):
-            rows.extend(fetch_rows_parallel(config, group=group, start_chunk=start_chunk, end=end, workers=MAX_WORKERS))
+            rows.extend(fetch_rows_xzver(nntp_client, group=group,start=start, end=end))
             if len(rows) >= want:
                 break
             
@@ -193,7 +142,7 @@ def fetch_headers_chunked(config:ConfigParser, group:str, limit: int = 5_000_000
 
         natural = srv_last - lo + 1
         want = natural if (limit is None or limit <= 0) else min(int(limit), natural)
-        print(f"computed: hi='n/a'  lo={lo} low_stop= 'n/a'  want={want}")
+        print(f"computed: hi='n/a'  lo={lo} low_stop= 'n/a'  want={want:,}")
         while len(rows) < want and lo <= srv_last:
             start_chunk = lo
             end = min(srv_last, lo + chunk_size - 1)
@@ -203,8 +152,8 @@ def fetch_headers_chunked(config:ConfigParser, group:str, limit: int = 5_000_000
             chunk_span = end - start_chunk + 1
             if remaining < chunk_span:
                 end = start_chunk + remaining - 1
-
-            rows.extend(fetch_rows_parallel(config, group=group, start_chunk=start_chunk, end=end, workers=MAX_WORKERS))
+            print(f"sending request for {group} start:{start_chunk:,} end:{end:,}")                
+            rows.extend(fetch_rows_xzver(nntp_client, group=group,start=start_chunk, end=end))
             if len(rows) >= want:
                 break
 
@@ -237,7 +186,9 @@ if __name__ == '__main__':
             cached_headers_file = f"{TMP_ROWS_PATH_BASE}/{group}.json"
             start_time = time.time()
             with open(cached_headers_file, "w", encoding="utf-8") as f:
-                json.dump(rows, f, ensure_ascii=False, indent=2)
+                for row in rows:
+                    json.dump(row, f, ensure_ascii=False)
+                    f.write("\n")
             end_time = time.time()
             print(f"wrote {len(rows):,} to {cached_headers_file} in {end_time - start_time:.4f} seconds")
             start_time = time.time()
