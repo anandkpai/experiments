@@ -184,7 +184,7 @@ def cluster_files_by_subject_per_poster(
                         used[j] = True
                 clusters.append(cluster)
                 if not(len(clusters)%100) :
-                    print(f"created {len(clusters):,} clusters, finished with {count} posters in {time.time() - start_time:4f}")
+                    print(f"created {len(clusters):,} clusters, finished with {count} posters in {time.time() - start_time:4f} seconds")
     print(f"finished: created {len(clusters):,} in {time.time() - start_time:4f}")
     return clusters
 
